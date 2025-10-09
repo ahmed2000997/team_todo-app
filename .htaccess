@@ -1,0 +1,12 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /team_todo-app/
+
+  # إذا دخل المستخدم للمسار الرئيسي
+  RewriteRule ^$ public/ [L]
+
+  # أي طلب آخر يُوجّه لمجلد public
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
