@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $loggedUser = $user->login($email, $password);
         if ($loggedUser) {
             $_SESSION['user'] = $loggedUser;
-            header("Location: ../../app/views/dashboard/home.php");
+            header("Location: ../../app/views/dashboard/dashboard.php?page=home");
             exit;
         } else {
             echo "❌ البريد أو كلمة المرور غير صحيحة.";
