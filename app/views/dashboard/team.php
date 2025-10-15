@@ -1,26 +1,107 @@
+<?php
+if (!isset($_SESSION)) session_start();
+$user = $_SESSION['user'];
+?>
+
 <div class="team-container">
   <div class="team-header">
     <h2>👥 فريقي</h2>
-    <button class="add-member" onclick="addMember()">➕ إضافة صديق</button>
   </div>
 
-  <div class="team-list" id="teamList">
-    <div class="member-card"><span>Ahmed</span></div>
-    <div class="member-card"><span>Adam997</span></div>
-    <div class="member-card"><span>Keroum997</span></div>
+  <!-- 🔍 البحث عن صديق -->
+  <div class="search-section">
+    <input type="text" id="friendEmail" placeholder="🔍 أدخل البريد الإلكتروني لإضافة صديق...">
+    <button onclick="searchFriend()">بحث</button>
+  </div>
+
+  <div id="results" class="results-box"></div>
+
+  <!-- 📋 قائمة الفريق -->
+  <h3>أعضاء الفريق الحاليين</h3>
+  <div id="teamList" class="team-list">
+    <p>⏳ جاري تحميل أعضاء فريقك...</p>
   </div>
 </div>
 
 <script>
-function addMember() {
-  const name = prompt("👤 أدخل اسم الصديق لإضافته إلى الفريق:");
-  if (!name) return;
+// ✅ تحميل أعضاء الفريق عند فتح الصفحة
+document.addEventListener("DOMContentLoaded", loadTeam);
 
-  const list = document.getElementById("teamList");
-  const card = document.createElement("div");
-  card.className = "member-card";
-  card.innerHTML = `<span>${name}</span>`;
-  list.appendChild(card);
+function loadTeam() {
+  fetch("../../../app/controllers/team.php?action=list")
+    .then(res => res.json())
+    .then(members => {
+      const list = document.getElementById("teamList");
+      list.innerHTML = "";
+
+      if (members.length === 0) {
+        list.innerHTML = "<p>❌ لا يوجد أعضاء في فريقك بعد</p>";
+        return;
+      }
+
+      members.forEach(m => {
+        const card = document.createElement("div");
+        card.className = "member-card";
+        card.innerHTML = `
+          <span>👤 ${m.email}</span>
+          <button class="remove-btn" onclick="removeFromTeam(${m.id_user})">❌ إزالة</button>
+        `;
+        list.appendChild(card);
+      });
+    });
+}
+
+// ✅ البحث عن صديق بالبريد
+function searchFriend() {
+  const email = document.getElementById("friendEmail").value.trim();
+  if (!email) return alert("⚠️ الرجاء إدخال بريد إلكتروني للبحث");
+
+  fetch(`../../../app/controllers/team.php?action=search&email=${encodeURIComponent(email)}`)
+    .then(res => res.json())
+    .then(users => {
+      const box = document.getElementById("results");
+      box.innerHTML = "";
+      if (users.length === 0) {
+        box.innerHTML = "<p>❌ لا يوجد مستخدم بهذا البريد</p>";
+        return;
+      }
+
+      users.forEach(u => {
+        const card = document.createElement("div");
+        card.className = "user-card";
+        card.innerHTML = `
+          <span>📧 ${u.email}</span>
+          <button onclick="addToTeam(${u.id_user})">➕ إضافة</button>
+        `;
+        box.appendChild(card);
+      });
+    });
+}
+
+// ✅ إضافة صديق للفريق
+function addToTeam(id) {
+  fetch('../../../app/controllers/team.php', {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ friend_id: id })
+  })
+  .then(res => res.json())
+  .then(d => {
+    alert(d.message);
+    if (d.success) loadTeam(); // إعادة تحميل القائمة
+  });
+}
+
+// ✅ إزالة عضو من الفريق
+function removeFromTeam(id) {
+  if (!confirm("هل تريد إزالة هذا العضو من الفريق؟")) return;
+
+  fetch(`../../../app/controllers/team.php?action=remove&id=${id}`)
+    .then(res => res.json())
+    .then(d => {
+      alert(d.message);
+      if (d.success) loadTeam();
+    });
 }
 </script>
 
@@ -34,46 +115,51 @@ function addMember() {
   padding: 30px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
-.team-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
 .team-header h2 {
   color: #4A6CF7;
   margin: 0;
 }
-.team-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 15px;
+.search-section {
+  display: flex;
+  gap: 10px;
 }
-.member-card {
-  background: #f4f6fb;
-  border-radius: 12px;
-  padding: 15px;
-  text-align: center;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-  transition: transform 0.2s ease;
+.search-section input {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
 }
-.member-card:hover {
-  transform: scale(1.05);
-}
-.member-card span {
-  display: block;
-  font-size: 1.2em;
-  color: #333;
-}
-.add-member {
-  padding: 10px 16px;
+.search-section button {
   background: #4A6CF7;
-  color: white;
+  color: #fff;
   border: none;
+  padding: 10px 16px;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.3s;
 }
-.add-member:hover {
-  background: #3655d9;
+.results-box, .team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.user-card, .member-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f4f6fb;
+  border-radius: 8px;
+  padding: 10px 15px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+}
+.user-card button, .remove-btn {
+  background: #1e90ff;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.remove-btn {
+  background: #ff4d4f;
 }
 </style>
