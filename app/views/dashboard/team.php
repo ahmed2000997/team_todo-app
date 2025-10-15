@@ -8,10 +8,10 @@ $user = $_SESSION['user'];
     <h2>👥 فريقي</h2>
   </div>
 
-  <!-- 🔍 البحث عن صديق -->
+  <!-- 🔍 البحث مع الإكمال التلقائي -->
   <div class="search-section">
     <input type="text" id="friendEmail" placeholder="🔍 أدخل البريد الإلكتروني لإضافة صديق...">
-    <button onclick="searchFriend()">بحث</button>
+    <div id="suggestions" class="suggestions-box"></div>
   </div>
 
   <div id="results" class="results-box"></div>
@@ -23,10 +23,71 @@ $user = $_SESSION['user'];
   </div>
 </div>
 
-<script>
-// ✅ تحميل أعضاء الفريق عند فتح الصفحة
-document.addEventListener("DOMContentLoaded", loadTeam);
+<!-- ✅ Toast notifications -->
+<div id="toast-container"></div>
 
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  loadTeam();
+  const input = document.getElementById("friendEmail");
+
+  // ✅ استدعاء الإكمال التلقائي أثناء الكتابة
+  input.addEventListener("input", () => {
+    const query = input.value.trim();
+    const box = document.getElementById("suggestions");
+
+    if (query.length < 2) {
+      box.innerHTML = "";
+      box.style.display = "none";
+      return;
+    }
+
+    fetch(`../../../app/controllers/team.php?action=autocomplete&email=${encodeURIComponent(query)}`)
+      .then(res => res.json())
+      .then(users => {
+        box.innerHTML = "";
+        if (users.length === 0) {
+          box.style.display = "none";
+          return;
+        }
+
+        users.forEach(u => {
+          const item = document.createElement("div");
+          item.className = "suggestion-item";
+          item.textContent = u.email;
+          item.onclick = () => {
+            input.value = u.email;
+            box.innerHTML = "";
+            box.style.display = "none";
+            showUserCard(u);
+          };
+          box.appendChild(item);
+        });
+
+        box.style.display = "block";
+      });
+  });
+
+  // ✅ إخفاء القائمة عند الضغط خارجها
+  document.addEventListener("click", (e) => {
+    if (!document.querySelector(".search-section").contains(e.target)) {
+      document.getElementById("suggestions").style.display = "none";
+    }
+  });
+});
+
+// ✅ عرض المستخدم بعد اختياره من الاقتراحات
+function showUserCard(u) {
+  const box = document.getElementById("results");
+  box.innerHTML = `
+    <div class="user-card">
+      <span>📧 ${u.email}</span>
+      <button onclick="addToTeam(${u.id_user})">➕ إضافة</button>
+    </div>
+  `;
+}
+
+// ✅ تحميل أعضاء الفريق
 function loadTeam() {
   fetch("../../../app/controllers/team.php?action=list")
     .then(res => res.json())
@@ -51,34 +112,7 @@ function loadTeam() {
     });
 }
 
-// ✅ البحث عن صديق بالبريد
-function searchFriend() {
-  const email = document.getElementById("friendEmail").value.trim();
-  if (!email) return alert("⚠️ الرجاء إدخال بريد إلكتروني للبحث");
-
-  fetch(`../../../app/controllers/team.php?action=search&email=${encodeURIComponent(email)}`)
-    .then(res => res.json())
-    .then(users => {
-      const box = document.getElementById("results");
-      box.innerHTML = "";
-      if (users.length === 0) {
-        box.innerHTML = "<p>❌ لا يوجد مستخدم بهذا البريد</p>";
-        return;
-      }
-
-      users.forEach(u => {
-        const card = document.createElement("div");
-        card.className = "user-card";
-        card.innerHTML = `
-          <span>📧 ${u.email}</span>
-          <button onclick="addToTeam(${u.id_user})">➕ إضافة</button>
-        `;
-        box.appendChild(card);
-      });
-    });
-}
-
-// ✅ إضافة صديق للفريق
+// ✅ إضافة عضو
 function addToTeam(id) {
   fetch('../../../app/controllers/team.php', {
     method: "POST",
@@ -87,60 +121,82 @@ function addToTeam(id) {
   })
   .then(res => res.json())
   .then(d => {
-    alert(d.message);
-    if (d.success) loadTeam(); // إعادة تحميل القائمة
+    showToast(d.message, d.success ? "success" : "error");
+    if (d.success) loadTeam();
   });
 }
 
-// ✅ إزالة عضو من الفريق
+// ✅ إزالة عضو
 function removeFromTeam(id) {
   if (!confirm("هل تريد إزالة هذا العضو من الفريق؟")) return;
 
   fetch(`../../../app/controllers/team.php?action=remove&id=${id}`)
     .then(res => res.json())
     .then(d => {
-      alert(d.message);
+      showToast(d.message, d.success ? "success" : "error");
       if (d.success) loadTeam();
     });
+}
+
+// ✅ Toast أنيق
+function showToast(message, type = "info") {
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+
+  document.getElementById("toast-container").appendChild(toast);
+
+  setTimeout(() => { toast.classList.add("show"); }, 100);
+  setTimeout(() => {
+    toast.classList.remove("show");
+    setTimeout(() => toast.remove(), 400);
+  }, 3000);
 }
 </script>
 
 <style>
 .team-container {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
   background: #fff;
   border-radius: 16px;
   padding: 30px;
   box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 .team-header h2 {
   color: #4A6CF7;
   margin: 0;
 }
 .search-section {
+  position: relative;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 6px;
 }
 .search-section input {
-  flex: 1;
   padding: 10px;
   border: 1px solid #ccc;
   border-radius: 8px;
 }
-.search-section button {
-  background: #4A6CF7;
-  color: #fff;
-  border: none;
-  padding: 10px 16px;
+.suggestions-box {
+  display: none;
+  position: absolute;
+  top: 42px;
+  width: 100%;
+  background: white;
+  border: 1px solid #ddd;
   border-radius: 8px;
-  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  z-index: 10;
 }
-.results-box, .team-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.suggestion-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.suggestion-item:hover {
+  background: #f0f3ff;
 }
 .user-card, .member-card {
   display: flex;
@@ -149,10 +205,9 @@ function removeFromTeam(id) {
   background: #f4f6fb;
   border-radius: 8px;
   padding: 10px 15px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
 }
 .user-card button, .remove-btn {
-  background: #1e90ff;
+  background: #4A6CF7;
   color: white;
   border: none;
   padding: 6px 12px;
@@ -162,4 +217,34 @@ function removeFromTeam(id) {
 .remove-btn {
   background: #ff4d4f;
 }
+
+/* Toasts */
+#toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 9999;
+}
+.toast {
+  opacity: 0;
+  transform: translateY(-20px);
+  background: #333;
+  color: white;
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-size: 15px;
+  min-width: 220px;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+  transition: all 0.4s ease;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+.toast.success { background: #2ecc71; }
+.toast.error { background: #e74c3c; }
+.toast.info { background: #3498db; }
 </style>
