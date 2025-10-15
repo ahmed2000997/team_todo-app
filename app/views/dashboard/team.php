@@ -42,7 +42,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    fetch(`../../../app/controllers/team.php?action=autocomplete&email=${encodeURIComponent(query)}`)
+    fetch(`../../../app/controllers/TeamController.php?action=autocomplete&email=${encodeURIComponent(query)}`)
       .then(res => res.json())
       .then(users => {
         box.innerHTML = "";
@@ -89,7 +89,7 @@ function showUserCard(u) {
 
 // ✅ تحميل أعضاء الفريق
 function loadTeam() {
-  fetch("../../../app/controllers/team.php?action=list")
+  fetch("../../../app/controllers/TeamController.php?action=list")
     .then(res => res.json())
     .then(members => {
       const list = document.getElementById("teamList");
@@ -114,7 +114,7 @@ function loadTeam() {
 
 // ✅ إضافة عضو
 function addToTeam(id) {
-  fetch('../../../app/controllers/team.php', {
+  fetch('../../../app/controllers/TeamController.php', {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({ friend_id: id })
@@ -130,7 +130,7 @@ function addToTeam(id) {
 function removeFromTeam(id) {
   if (!confirm("هل تريد إزالة هذا العضو من الفريق؟")) return;
 
-  fetch(`../../../app/controllers/team.php?action=remove&id=${id}`)
+  fetch(`../../../app/controllers/TeamController.php?action=remove&id=${id}`)
     .then(res => res.json())
     .then(d => {
       showToast(d.message, d.success ? "success" : "error");
