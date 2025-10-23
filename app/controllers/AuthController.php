@@ -15,7 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header("Location: ../../app/views/auth/login.php?registered=1");
             exit;
         } else {
-            echo "❌  فشل إنشاء الحساب.";
+            echo "❌ فشل إنشاء الحساب.";
         }
     }
 
