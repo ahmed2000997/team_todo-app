@@ -18,28 +18,43 @@ $homeModel = new HomeModel($pdo);
    🔹 إضافة مهمة جديدة
    ========================================================== */
 if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["action"]) && $_POST["action"] === "add") {
-  $title = trim($_POST["title"] ?? '');
-  $description = trim($_POST["description"] ?? '');
+    $title = trim($_POST["title"] ?? '');
+    $description = trim($_POST["description"] ?? '');
 
-  if (empty($title)) {
-    echo json_encode(["success" => false, "message" => "⚠️ يرجى إدخال عنوان المهمة."]);
-    exit;
-  }
-
-  try {
-    $added = $homeModel->addTask($userId, $title, $description);
-
-    if ($added) {
-      echo json_encode(["success" => true, "message" => "✅ تم إضافة المهمة بنجاح."]);
-    } else {
-      echo json_encode(["success" => false, "message" => "❌ فشل في إضافة المهمة."]);
+    // استقبال الأعضاء: نتوقع members[] أو فارغ
+    $members = [];
+    if (isset($_POST['members']) && is_array($_POST['members'])) {
+        $members = $_POST['members'];
+    } elseif (isset($_POST['members'])) {
+        // حالة وصول قيمة واحدة كـ string (غير محتمل بعد التعديل) — نحاول تفاديه
+        $members = explode(',', $_POST['members']);
     }
-  } catch (Exception $e) {
-    echo json_encode(["success" => false, "message" => "❌ خطأ أثناء إضافة المهمة: " . $e->getMessage()]);
-  }
 
-  exit; // 🧩 مهم لإيقاف التنفيذ بعد الإضافة
+    // تنظيف وتحويل إلى أعداد صحيحة لتجنب SQL injection أو قيم غير مرغوبة
+    $members = array_map('intval', $members);
+    // إزالة القيم الصفرية أو السلبية الناتجة عن تحويل نصوص فارغة
+    $members = array_values(array_filter($members, function($v) { return $v > 0; }));
+
+    if (empty($title)) {
+        echo json_encode(["success" => false, "message" => "⚠️ يرجى إدخال عنوان المهمة."]);
+        exit;
+    }
+
+    try {
+        $added = $homeModel->addTask($userId, $title, $description, $members);
+        echo json_encode([
+            "success" => $added,
+            "message" => $added ? "✅ تم إضافة المهمة بنجاح." : "❌ فشل في إضافة المهمة."
+        ]);
+    } catch (Exception $e) {
+        // أعد رسالة الخطأ لتساعد في التصحيح، لكن في بيئة انتاجية ضع رسالة عامة بدل التفاصيل
+        echo json_encode(["success" => false, "message" => "❌ خطأ أثناء إضافة المهمة: " . $e->getMessage()]);
+    }
+
+    exit;
 }
+
+
 
 /* ==========================================================
    🔹 حذف مهمة

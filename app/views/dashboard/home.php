@@ -17,6 +17,7 @@
   <!-- 👥 قسم الفريق -->
   <div class="team-section">
     <h3>Team</h3>
+    <label><input type="checkbox" id="selectAllMembers"> تحديد الكل</label>
     <div id="teamBox" class="team-box">
       <p>⏳ جاري تحميل أعضاء الفريق...</p>
     </div>
@@ -24,7 +25,7 @@
 </div>
 
 <script>
-// ✅ دالة لحذف مهمة من قاعدة البيانات + من الواجهة
+// ✅ حذف مهمة
 function deleteTaskRemote(taskId, buttonElement) {
   let liElement = buttonElement?.closest("li");
   if (!liElement && taskId) liElement = document.querySelector(`li[data-task-id="${taskId}"]`);
@@ -46,100 +47,99 @@ function deleteTaskRemote(taskId, buttonElement) {
 }
 
 /* ==========================================================
-   ✅ دالة لإضافة مهمة جديدة
+   ✅ إضافة مهمة جديدة
    ========================================================== */
 function addTask() {
-  const titleInput = document.getElementById("taskInput");
-  const descInput = document.getElementById("taskDesc");
+  const title = document.getElementById("taskInput").value.trim();
+  const description = document.getElementById("taskDesc").value.trim();
 
-  const title = titleInput.value.trim();
-  const description = descInput.value.trim();
+  // جمع أعضاء الفريق المختارين (data-user-id يجب أن يكون معروضاً لكل checkbox)
+  const checkedMembers = Array.from(document.querySelectorAll("#teamBox input[type='checkbox']:checked"))
+    .map(cb => cb.dataset.userId)
+    .filter(id => id !== undefined && id !== null && id !== '');
 
   if (!title) {
     alert("⚠️ الرجاء إدخال عنوان المهمة");
     return;
   }
 
+  // بناء URLSearchParams بشكل صحيح: append لكل عضو كمفتاح members[]
+  const params = new URLSearchParams();
+  params.append('action', 'add');
+  params.append('title', title);
+  params.append('description', description);
+
+  checkedMembers.forEach(memberId => {
+    params.append('members[]', memberId); // مهم: members[] لكي تكون مصفوفة في PHP
+  });
+
+  // لا تقم بتعيين Content-Type يدوياً عند إرسال URLSearchParams؛ المتصفح يعينه تلقائياً
   fetch("/team_todo-app/app/controllers/HomeController.php", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      action: "add",
-      title: title,
-      description: description
-    })
+    body: params
   })
     .then(res => res.json())
     .then(data => {
       if (data.success) {
         alert("✅ تم إضافة المهمة بنجاح");
-        titleInput.value = "";
-        descInput.value = "";
-
-        // 🟢 أضف المهمة الجديدة مباشرة إلى القائمة
-        const taskList = document.getElementById("taskList");
-        const li = document.createElement("li");
-        li.dataset.taskId = "temp-" + Date.now();
-        li.innerHTML = `
-          🟢 <strong>${escapeHtml(title)}</strong><br>
-          <small>${escapeHtml(description)}</small>
-          <button class="delete-btn" style="margin-left:10px; color:red; cursor:pointer;">🗑 حذف</button>
-        `;
-
-        li.querySelector(".delete-btn").addEventListener("click", (e) => {
-          e.preventDefault();
-          deleteTaskRemote(li.dataset.taskId, li.querySelector(".delete-btn"));
-        });
-
-        taskList.prepend(li);
+        document.getElementById("taskInput").value = "";
+        document.getElementById("taskDesc").value = "";
+        loadData(); // إعادة تحميل لعرض المهمة والأعضاء
       } else {
         alert(data.message || "❌ فشل في إضافة المهمة.");
       }
     })
-    .catch(() => alert("⚠️ خطأ في الاتصال بالسيرفر."));
+    .catch(err => {
+      console.error(err);
+      alert("⚠️ خطأ في الاتصال بالسيرفر.");
+    });
 }
+
 
 document.getElementById("addTaskBtn").addEventListener("click", addTask);
 
 /* ==========================================================
-   ✅ عند تحميل الصفحة: جلب الفريق والمهام
+   ✅ تحميل الفريق والمهام
    ========================================================== */
-document.addEventListener("DOMContentLoaded", () => {
+function loadData() {
   fetch("/team_todo-app/app/controllers/HomeController.php")
     .then(res => res.json())
     .then(data => {
-      const taskList = document.getElementById("taskList");
       const box = document.getElementById("teamBox");
+      const taskList = document.getElementById("taskList");
       box.innerHTML = "";
       taskList.innerHTML = "";
 
       if (!data.success) {
         box.innerHTML = `<p style='color:red;'>${data.message}</p>`;
-        taskList.innerHTML = "<li style='color:red;'>⚠️ فشل في تحميل البيانات.</li>";
         return;
       }
 
       // ✅ عرض الفريق
-      if (!data.members || data.members.length === 0) {
+      if (!data.members.length) {
         box.innerHTML = "<p>❌ لا يوجد أعضاء في فريقك بعد</p>";
       } else {
         data.members.forEach(m => {
           const label = document.createElement("label");
-          label.innerHTML = `<input type='checkbox' checked> 👤 ${m.email}`;
+          label.innerHTML = `<input type='checkbox' data-user-id='${m.id_user}'> 👤 ${m.email}`;
           box.appendChild(label);
         });
       }
 
       // ✅ عرض المهام
-      if (!data.tasks || data.tasks.length === 0) {
+      if (!data.tasks.length) {
         taskList.innerHTML = "<li>📭 لا توجد مهام حالياً</li>";
       } else {
         data.tasks.forEach(t => {
           const li = document.createElement("li");
           li.dataset.taskId = t.id;
+          const members = (t.members && t.members.length)
+            ? `👥 ${t.members.join(', ')}`
+            : "👤 لا أعضاء مشاركين";
           li.innerHTML = `
             🟢 <strong>${escapeHtml(t.title)}</strong><br>
-            <small>${escapeHtml(t.description || '')}</small>
+            <small>${escapeHtml(t.description || '')}</small><br>
+            <em>${members}</em>
             <button class="delete-btn" style="margin-left:10px; color:red; cursor:pointer;">🗑 حذف</button>
           `;
           li.querySelector(".delete-btn").addEventListener("click", (e) => {
@@ -149,16 +149,18 @@ document.addEventListener("DOMContentLoaded", () => {
           taskList.appendChild(li);
         });
       }
-    })
-    .catch(() => {
-      document.getElementById("teamBox").innerHTML =
-        "<p style='color:red;'>⚠️ فشل في تحميل أعضاء الفريق.</p>";
-      document.getElementById("taskList").innerHTML =
-        "<li style='color:red;'>⚠️ فشل في تحميل المهام.</li>";
     });
+}
+
+// ✅ عند تحميل الصفحة
+document.addEventListener("DOMContentLoaded", loadData);
+
+// ✅ تحديد الكل
+document.getElementById("selectAllMembers").addEventListener("change", function() {
+  document.querySelectorAll("#teamBox input[type='checkbox']").forEach(cb => cb.checked = this.checked);
 });
 
-// 🔒 دالة أمان لحماية النص من XSS
+// 🔒 حماية النص من XSS
 function escapeHtml(text) {
   if (!text) return "";
   return text.replace(/[&<>"'`=\/]/g, s => ({
@@ -192,5 +194,9 @@ function escapeHtml(text) {
 }
 .task-input button:hover {
   background-color: #005fcc;
+}
+.team-box label {
+  display: block;
+  margin-bottom: 5px;
 }
 </style>
